@@ -10,7 +10,12 @@ body {
   }
   
   .main-screen-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     text-align: center;
+    height: 100%; /* Ensure it spans the height of the screen */
   }
   
   .main-title {
@@ -18,21 +23,39 @@ body {
     margin-bottom: 20px;
   }
   
+  .main-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    max-width: 400px;
+    padding: 1.5rem; /* Adjust padding to fit the content */
+    background: rgba(255, 255, 255, 0.1); /* Semi-transparent backdrop */
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3); /* Subtle shadow */
+    box-sizing: border-box; /* Include padding in size calculations */
+    align-items: stretch; /* Stretch items to fit the full width */
+  }
+  
   .button-container {
     display: flex;
     flex-direction: column;
     gap: 15px;
+    align-items: stretch; /* Ensure buttons stretch inside the container */
+    width: 100%; /* Make container full width of parent */
   }
   
   .main-button {
-    padding: 15px 30px;
+    display: block; /* Ensure buttons behave as block-level elements */
+    padding: 12px 20px;
     font-size: 1rem;
-    color: #fff;
+    color: white;
     border: none;
-    border-radius: 25px;
+    border-radius: 5px;
     background: #ff5733;
     cursor: pointer;
     transition: background 0.3s;
+    width: 100%; /* Buttons take full width of the container */
   }
   
   .main-button:hover {
