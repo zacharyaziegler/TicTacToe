@@ -19,6 +19,19 @@ const MainScreen = () => {
         });
     };
 
+    const handleSignup = () => {
+      // Animate the current screen out to the right
+      gsap.to(".main-screen-container", {
+          x: "100%",
+          opacity: 0,
+          duration: 1.0,
+          ease: "power2.inOut",
+          onComplete: () => {
+              navigate("/signup"); // Navigate to the signup page after animation
+          },
+      });
+  };
+
     useEffect(() => {
         // GSAP animations for MainScreen
         gsap.fromTo(
@@ -45,7 +58,7 @@ const MainScreen = () => {
           >
             Log In
           </button>
-          <button className="main-button signup-button">Sign Up</button>
+          <button className="main-button signup-button" onClick={handleSignup}>Sign Up</button>
           <button className="main-button anonymous-button">
             Continue Anonymously
           </button>
