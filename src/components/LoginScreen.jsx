@@ -1,27 +1,41 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { gsap } from "gsap";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "../supabaseClient";
 import "./LoginScreen.css";
 
 const LoginScreen = () => {
   const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errorMessage, setErrorMessage] = useState(""); // State to hold the error message
 
-  // const handleLogin = async (event) => {
-  //   event.preventDefault();
-  //   const email = event.target.email.value;
-  //   const password = event.target.password.value;
-  
-  //   try {
-  //     const user = await Auth.signIn(email, password);
-  //     console.log("Login successful:", user);
-  //     alert("Login successful!");
-  //   } catch (error) {
-  //     console.error("Login error:", error);
-  //     alert(`Login failed: ${error.message}`);
-  //   }
-  // };
-  
+  /****** LOGIC ******/
 
+  const handleLogin = async (event) => {
+    event.preventDefault(); // Prevent page reload
+    setErrorMessage(""); // Reset error message before attempting login
+
+    try {
+      // Attempt to sign in the user
+      const { data: session, error: loginError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (loginError) {
+        throw loginError;
+      }
+
+      console.log("User signed in:", session);
+      navigate("/home"); // Redirect to the HomeScreen after successful login
+    } catch (error) {
+      console.error("Login error:", error.message);
+      setErrorMessage("Invalid email or password. Please try again.");
+    }
+  };
+
+  /****** ANIMATION ******/
   useEffect(() => {
     // GSAP animation for the login page entering
     gsap.fromTo(
@@ -51,7 +65,7 @@ const LoginScreen = () => {
           &#8592; Back
         </button>
         <h1 className="login-title">Log In</h1>
-        <form className="login-form">
+        <form className="login-form" onSubmit={handleLogin}>
           <label className="login-label" htmlFor="email">
             Email
           </label>
@@ -60,6 +74,8 @@ const LoginScreen = () => {
             type="email"
             placeholder="Enter your email"
             className="login-input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)} // Controlled input
             required
           />
           <label className="login-label" htmlFor="password">
@@ -70,12 +86,17 @@ const LoginScreen = () => {
             type="password"
             placeholder="Enter your password"
             className="login-input"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)} // Controlled input
             required
           />
           <button type="submit" className="login-button-login">
             Log In
           </button>
         </form>
+
+        {/* Display error message if login fails */}
+        {errorMessage && <p className="error-message">{errorMessage}</p>}
       </div>
     </div>
   );
