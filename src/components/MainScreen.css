@@ -1,7 +1,7 @@
 body {
     margin: 0;
     font-family: "Arial", sans-serif;
-    background: linear-gradient(180deg, #b3b7ff, #000dff);
+    background: linear-gradient(90deg, #a30a0a, #000dff);
     color: #fff;
     height: 100vh;
     display: flex;
