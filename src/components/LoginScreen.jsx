@@ -28,7 +28,17 @@ const LoginScreen = () => {
       }
 
       console.log("User signed in:", session);
-      navigate("/home"); // Redirect to the HomeScreen after successful login
+
+      // Center-to-top wipe animation on login
+      gsap.to(".login-screen-container", {
+        y: "-100%", // Move up
+        opacity: 0,
+        duration: 1.0,
+        ease: "power2.inOut",
+        onComplete: () => {
+          navigate("/home"); // Navigate to HomeScreen after animation
+        },
+      });
     } catch (error) {
       console.error("Login error:", error.message);
       setErrorMessage("Invalid email or password. Please try again.");
@@ -37,7 +47,7 @@ const LoginScreen = () => {
 
   /****** ANIMATION ******/
   useEffect(() => {
-    // GSAP animation for the login page entering
+    // GSAP animation for the login page entering (from the right to center)
     gsap.fromTo(
       ".login-screen-container",
       { x: "100%", opacity: 0 },
