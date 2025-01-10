@@ -4,6 +4,7 @@ import LoginScreen from "./components/LoginScreen";
 import SignupScreen from "./components/SignupScreen";
 import HomeScreen from "./components/HomeScreen";
 import ProtectedRoute from "./components/ProtectedRoute";
+import PlayBotScreen from "./components/PlayBotScreen"
 
 const App = () => {
   return (
@@ -23,8 +24,14 @@ const App = () => {
             </ProtectedRoute>
           }
         />
-        {/* You can add more protected routes like this: */}
-        {/* <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} /> */}
+        <Route
+          path="/play-bot"
+          element={
+            <ProtectedRoute>
+              <PlayBotScreen />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </Router>
   );

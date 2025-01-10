@@ -9,12 +9,11 @@ body {
     justify-content: center;
     align-items: center;
     height: 100vh;
-    width: 70vw;
+    width: 100vw;
   }
   
   .vertical-content-box {
     width: 60%; /* Cover more horizontal space */
-    max-width: 700px; /* Limit width for better readability */
     height: 100%; /* Full vertical height */
     background-color: rgba(50, 50, 50, 0.65); /* Medium-dark gray semi-transparent */
     padding: 40px;
