@@ -26,9 +26,6 @@ const PlayBotScreen = () => {
 
   /****** LOGIC ******/
 
-
-
-
   // Check if there is a winner
   const checkWinner = useCallback((currentBoard) => {
     for (const combination of winningCombinations) {
@@ -44,33 +41,62 @@ const PlayBotScreen = () => {
     return null; // No winner
   }, []); // Dependency array is empty because `winningCombinations` is static
 
-  // Bot's move logic
-  const handleBotMove = useCallback(
-    (currentBoard) => {
-      const emptyIndices = currentBoard
-        .map((square, index) => (square === null ? index : null))
-        .filter((i) => i !== null);
+// Bot's move logic
+const handleBotMove = useCallback(
+  (currentBoard) => {
+    const emptyIndices = currentBoard
+      .map((square, index) => (square === null ? index : null))
+      .filter((i) => i !== null);
 
-      if (emptyIndices.length === 0) return; // No moves left (end of game)
+    if (emptyIndices.length === 0) return; // No moves left (end of game)
 
-      const randomIndex =
-        emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
-      const newBoard = [...currentBoard];
-      newBoard[randomIndex] = botSymbol; // Bot places its symbol
-      setBoard(newBoard); // Update the board state
+    let bestMove = null;
 
-      // Check for a winner after the bot's move
-      const gameWinner = checkWinner(newBoard);
-      if (gameWinner) {
-        setWinner(gameWinner);
-      } else if (newBoard.every((square) => square !== null)) {
-        setIsTie(true); // All squares filled and no winner
-      } else {
-        setIsPlayerTurn(true); // Player's turn after bot moves
+    // 1. Check if the bot can win
+    for (const combination of winningCombinations) {
+      const [a, b, c] = combination;
+      const values = [currentBoard[a], currentBoard[b], currentBoard[c]];
+      if (values.filter((val) => val === botSymbol).length === 2 && values.includes(null)) {
+        bestMove = combination[values.indexOf(null)]; // Winning move for bot
+        break;
       }
-    },
-    [botSymbol, checkWinner]
-  );
+    }
+
+    // 2. Block the player if they’re about to win
+    if (bestMove === null) {
+      for (const combination of winningCombinations) {
+        const [a, b, c] = combination;
+        const values = [currentBoard[a], currentBoard[b], currentBoard[c]];
+        if (values.filter((val) => val === playerSymbol).length === 2 && values.includes(null)) {
+          bestMove = combination[values.indexOf(null)]; // Blocking move
+          break;
+        }
+      }
+    }
+
+    // 3. Otherwise, pick a random available square
+    if (bestMove === null) {
+      const randomIndex = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+      bestMove = randomIndex;
+    }
+
+    const newBoard = [...currentBoard];
+    newBoard[bestMove] = botSymbol; // Bot places its symbol
+    setBoard(newBoard); // Update the board state
+
+    // Check for a winner after the bot's move
+    const gameWinner = checkWinner(newBoard);
+    if (gameWinner) {
+      setWinner(gameWinner);
+    } else if (newBoard.every((square) => square !== null)) {
+      setIsTie(true); // All squares filled and no winner
+    } else {
+      setIsPlayerTurn(true); // Player's turn after bot moves
+    }
+  },
+  [botSymbol, playerSymbol, checkWinner, setBoard, setIsPlayerTurn]
+);
+
 
 
    // Handle player symbol selection and start the game
@@ -141,7 +167,7 @@ const PlayBotScreen = () => {
           {board.map((square, index) => (
             <div
               key={index}
-              className="square"
+              className={`square ${square === "X" ? "x-symbol" : square === "O" ? "o-symbol" : ""}`}
               onClick={() => handleSquareClick(index)}
             >
               {square}
