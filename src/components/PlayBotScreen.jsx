@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { gsap } from "gsap";
 import "./PlayBotScreen.css";
 
@@ -19,12 +20,19 @@ const PlayBotScreen = () => {
   const [isPlayerTurn, setIsPlayerTurn] = useState(true); // Track turns (for bot logic later)
   const [playerSymbol, setPlayerSymbol] = useState(""); // Track the player's chosen symbol (X or O)
   const [botSymbol, setBotSymbol] = useState(""); // Track the bot's symbol
-  const [showConfigPopup, setShowConfigPopup] = useState(true); // Show the config popup initially
+  const [showConfigPopup, setShowConfigPopup] = useState(false); // Let animation play initially, then show popup
   const [botShouldMoveFirst, setBotShouldMoveFirst] = useState(false); // Track if bot should move first
   const [winner, setWinner] = useState(null); // Track the winner
   const [isTie, setIsTie] = useState(false); // Track if the game is a tie
+  const navigate = useNavigate(); // For navigation back to home
+  const ANIMATION_DURATION = 1200; // Duration of the animation in ms
 
   /****** LOGIC ******/
+
+  // Handle Quit button click
+  const handleQuit = () => {
+    navigate("/home"); // Redirect back to home screen
+  };
 
   // Check if there is a winner
   const checkWinner = useCallback((currentBoard) => {
@@ -155,11 +163,20 @@ const handleBotMove = useCallback(
       { y: "100%", opacity: 0 },
       { y: "0%", opacity: 1, duration: 1.2, ease: "power2.out" }
     );
+
+    // Show the config popup after the animation completes
+    const timer = setTimeout(() => {
+      setShowConfigPopup(true); // Show the configuration overlay
+    }, ANIMATION_DURATION);
+
+    // Clean up the timeout to prevent memory leaks
+    return () => clearTimeout(timer);
   }, []);
 
   return (
     <div className="home-screen-container">
       <div className="vertical-content-box">
+      <button className="quit-button" onClick={handleQuit}>Quit</button>
         <h1>Bot Match</h1>
 
         {/* Game Board */}
