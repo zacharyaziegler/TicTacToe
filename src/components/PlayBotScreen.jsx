@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { gsap } from "gsap";
+import { supabase } from "../supabaseClient";
 import "./PlayBotScreen.css";
 
   // Winning combinations (indexes)
@@ -25,9 +26,40 @@ const PlayBotScreen = () => {
   const [winner, setWinner] = useState(null); // Track the winner
   const [isTie, setIsTie] = useState(false); // Track if the game is a tie
   const navigate = useNavigate(); // For navigation back to home
+  const [username, setUsername] = useState("Loading..."); // Displayed username
   const ANIMATION_DURATION = 1200; // Duration of the animation in ms
 
   /****** LOGIC ******/
+
+  // Fetch the username of the logged-in user from Supabase
+  useEffect(() => {
+    const fetchUsername = async () => {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError) {
+        console.error("Error fetching user:", authError);
+        return;
+      }
+
+      // Fetch profile data
+      const { data, error } = await supabase
+        .from("profiles") // Replace "profiles" with your table name if different
+        .select("username")
+        .eq("id", user.id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching username:", error);
+      } else {
+        setUsername(data.username);
+      }
+    };
+
+    fetchUsername();
+  }, []);
 
   // Handle Quit button click
   const handleQuit = () => {
@@ -176,23 +208,53 @@ const handleBotMove = useCallback(
   return (
     <div className="home-screen-container">
       <div className="vertical-content-box">
-      <button className="quit-button" onClick={handleQuit}>Quit</button>
+        <button className="quit-button" onClick={handleQuit}>
+          Quit
+        </button>
         <h1>Bot Match</h1>
-
-        {/* Game Board */}
-        <div className="game-board">
-          {board.map((square, index) => (
-            <div
-              key={index}
-              className={`square ${square === "X" ? "x-symbol" : square === "O" ? "o-symbol" : ""}`}
-              onClick={() => handleSquareClick(index)}
-            >
-              {square}
+  
+        <div className="game-wrapper">
+          {/* Left: Player Info */}
+          <div className="player-info">
+            <h3>{username}</h3>
+            <p>
+              Symbol:{" "}
+              <span className={playerSymbol === "X" ? "x-symbol" : "o-symbol"}>
+                {playerSymbol}
+              </span>
+            </p>
+          </div>
+  
+          {/* Game Board */}
+          <div className="game-board-wrapper">
+            <div className="game-board">
+              {board.map((square, index) => (
+                <div
+                  key={index}
+                  className={`square ${
+                    square === "X" ? "x-symbol" : square === "O" ? "o-symbol" : ""
+                  }`}
+                  onClick={() => handleSquareClick(index)}
+                >
+                  {square}
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+  
+          {/* Right: Bot Info */}
+          <div className="player-info">
+            <h3>Bot</h3>
+            <p>
+              Symbol:{" "}
+              <span className={botSymbol === "X" ? "x-symbol" : "o-symbol"}>
+                {botSymbol}
+              </span>
+            </p>
+          </div>
         </div>
       </div>
-
+  
       {/* Configuration Popup */}
       {showConfigPopup && (
         <div className="config-popup-overlay">
@@ -218,7 +280,7 @@ const handleBotMove = useCallback(
           </div>
         </div>
       )}
-
+  
       {/* Winner or Tie Popup */}
       {(winner || isTie) && (
         <div className="winner-popup-overlay">
