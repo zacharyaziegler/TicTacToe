@@ -125,3 +125,21 @@ h1 {
   font-weight: bold;
   -webkit-text-stroke: 2px #a3d8ff; /* Clean outline for O */
 }
+
+.quit-button {
+  position: absolute;
+  top: 60px;
+  left: 60px;
+  background-color: #ff4a4a;
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  font-size: 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.quit-button:hover {
+  background-color: #d43c3c;
+}
