@@ -62,8 +62,17 @@ const PlayBotScreen = () => {
   }, []);
 
   // Handle Quit button click
-  const handleQuit = () => {
-    navigate("/home"); // Redirect back to home screen
+  const handleBackToHome = () => {
+    // Navigate back to HomeScreen with animation
+    gsap.to(".home-screen-container", {
+      y: "100%",
+      opacity: 0,
+      duration: 1.0,
+      ease: "power2.inOut",
+      onComplete: () => {
+        navigate("/home", { state: { fromScreen: "PlayBotScreen" } }); // Pass the originating screen
+      },
+    });
   };
 
   // Check if there is a winner
@@ -208,7 +217,7 @@ const handleBotMove = useCallback(
   return (
     <div className="home-screen-container">
       <div className="vertical-content-box">
-        <button className="quit-button" onClick={handleQuit}>
+        <button className="quit-button" onClick={handleBackToHome}>
           Quit
         </button>
         <h1>Bot Match</h1>
@@ -292,9 +301,12 @@ const handleBotMove = useCallback(
                   : "You Lost!"
                 : "It's a Tie!"}
             </h2>
+            <div className="winner-popup-buttons">
             <button className="play-again-button" onClick={handlePlayAgain}>
               Play Again
             </button>
+            <button className="play-again-button" onClick= { handleBackToHome }>Quit</button>
+            </div>
           </div>
         </div>
       )}

@@ -4,7 +4,8 @@ import LoginScreen from "./components/LoginScreen";
 import SignupScreen from "./components/SignupScreen";
 import HomeScreen from "./components/HomeScreen";
 import ProtectedRoute from "./components/ProtectedRoute";
-import PlayBotScreen from "./components/PlayBotScreen"
+import PlayBotScreen from "./components/PlayBotScreen";
+import PlayRandomScreen from "./components/PlayRandomScreen";
 
 const App = () => {
   return (
@@ -29,6 +30,14 @@ const App = () => {
           element={
             <ProtectedRoute>
               <PlayBotScreen />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/play-random"
+          element={
+            <ProtectedRoute>
+              <PlayRandomScreen />
             </ProtectedRoute>
           }
         />
