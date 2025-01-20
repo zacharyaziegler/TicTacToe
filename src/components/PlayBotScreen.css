@@ -126,6 +126,7 @@ h1 {
   border-radius: 10px;
   text-align: center;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  flex-direction: column;
 }
 
 .winner-popup-content h2 {
@@ -181,4 +182,10 @@ h1 {
 
 .quit-button:hover {
   background-color: #d43c3c;
+}
+
+.winner-popup-buttons {
+  display: flex;
+  flex-direction: column; /* Stack the buttons vertically */
+  gap: 10px; /* Add space between buttons */
 }

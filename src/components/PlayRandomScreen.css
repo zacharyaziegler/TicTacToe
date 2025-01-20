@@ -1,0 +1,21 @@
+.play-random-container {
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #282c34; /* Adjust as needed */
+  }
+  
+  .vertical-content-box {
+    text-align: center;
+    color: white;
+  }
+  
+  h1 {
+    margin-bottom: 1rem;
+  }
+  
+  p {
+    margin-bottom: 2rem;
+  }
+  
