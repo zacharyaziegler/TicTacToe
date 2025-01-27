@@ -7,6 +7,73 @@ import "./PlayRandomScreen.css";
 const PlayRandomScreen = () => {
   const navigate = useNavigate();
 
+  useEffect(() => { // handle removing from queue due to browser/tab closure
+    const removeFromQueue = async () => {
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+        if (authError) throw authError;
+  
+        const userId = user.id;
+  
+        const { error: deleteError } = await supabase
+          .from("queue")
+          .delete()
+          .eq("user_id", userId);
+  
+        if (deleteError) throw deleteError;
+  
+        console.log("User removed from queue due to browser/tab closure.");
+      } catch (error) {
+        console.error("Error removing user from queue:", error.message);
+      }
+    };
+  
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      removeFromQueue();
+    };
+  
+    window.addEventListener("beforeunload", handleBeforeUnload);
+  
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
+
+  useEffect(() => { // heartbeat to ensure user in queue is active
+    const updateExpiry = async () => {
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+        if (authError) throw authError;
+  
+        const userId = user.id;
+  
+        const { error: updateError } = await supabase
+          .from("queue")
+          .update({ expiry: new Date(new Date().getTime() + 60000) }) // 1 minute from now
+          .eq("user_id", userId);
+  
+        if (updateError) throw updateError;
+  
+        console.log("Updated expiry time for user in queue.");
+      } catch (error) {
+        console.error("Error updating expiry:", error.message);
+      }
+    };
+  
+    const interval = setInterval(updateExpiry, 30000); // Update every 30 seconds
+  
+    return () => {
+      clearInterval(interval); // Clear interval on unmount
+    };
+  }, []);
+
   useEffect(() => {
     // GSAP animation for screen appearance
     gsap.fromTo(
@@ -29,103 +96,143 @@ const PlayRandomScreen = () => {
     });
   };
 
-const handleFindMatch = async () => {
-  try {
-    // Fetch the current user's UUID
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError) throw authError;
-
-    const userId = user.id;
-    console.log("Current User ID:", userId);
-
-    // Step 1: Look for an open game
-    const { data: availableGame, error: fetchError } = await supabase
-      .from("games")
-      .select("*")
-      .eq("status", "waiting") // Look for games waiting for a player
-      .neq("player_1", userId) // Exclude games created by the same user
-      .limit(1)
-      .single();
-
-    if (fetchError && fetchError.code !== "PGRST116") {
-      console.error("Error fetching available game:", fetchError);
-      throw fetchError;
-    }
-
-    console.log("Available Game:", availableGame);
-
-    if (availableGame) {
-      // Step 2: Join the existing game
-      const { error: updateError } = await supabase
-        .from("games")
-        .update({
-          player_2: userId,
-          status: "active", // Game is now active
-        })
-        .eq("id", availableGame.id)
-        .eq("status", "waiting"); // Ensure it hasn't been updated since fetch
-
-      if (updateError) throw updateError;
-
-      console.log("Match found! Navigating to the game board.", availableGame);
-
-      // Navigate to the game board
-      return navigate(`/game/${availableGame.id}`, {
-        state: { gameId: availableGame.id },
-      });
-    }
-
-    // Step 3: Create a new game if no open game exists
-    const { data: newGame, error: insertError } = await supabase
-      .from("games")
-      .insert([
-        {
-          player_1: userId, // Match creator
-          player_2: null, // Explicitly set to null
-          board: Array(9).fill(null), // Empty game board
-          current_turn: "player_1", // Player 1 starts by default
-          status: "waiting", // Waiting for an opponent
-        },
-      ])
-      .select()
-      .single();
-
-    if (insertError) throw insertError;
-
-    console.log("Game created. Waiting for a match...", newGame);
-
-    // Step 4: Wait for another player to join
-    const channel = supabase
-      .channel(`game-updates:${newGame.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "games",
-          filter: `id=eq.${newGame.id}`,
-        },
-        (payload) => {
-          if (payload.new.status === "active") {
-            console.log("Match found! Navigating to the game board.", payload.new);
-            channel.unsubscribe(); // Stop listening
-            navigate(`/game/${newGame.id}`, {
-              state: { gameId: newGame.id },
-            });
+  const handleFindMatch = async () => {
+    try {
+      // Refresh the user's session
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) {
+        console.error("Error refreshing session:", refreshError);
+        throw refreshError;
+      }
+      console.log("Session refreshed:", refreshData);
+  
+      // Fetch the current user's UUID
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+  
+      console.log("Authenticated user:", user);
+      console.error("Auth error (if any):", authError);
+  
+      if (authError) throw authError;
+  
+      const userId = user.id;
+      console.log("Current User ID:", userId);
+  
+      // Step 1: Add the user to the queue
+      const { error: queueError } = await supabase
+        .from("queue")
+        .insert([{ user_id: userId, is_matched: false, game_id: null }]);
+  
+      if (queueError) throw queueError;
+  
+      console.log("User added to queue.");
+  
+      // Step 2: Continuously check for a match
+      const channel = supabase
+        .channel("queue-updates")
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "queue",
+          },
+          async (payload) => {
+            if (payload.new.user_id === userId && payload.new.is_matched) {
+              console.log("Match found!", payload.new);
+  
+              // Navigate to the game board
+              channel.unsubscribe();
+              navigate(`/game/${payload.new.game_id}`, {
+                state: { gameId: payload.new.game_id },
+              });
+            }
           }
+        )
+        .subscribe();
+  
+      // Step 3: Try matching the user with another in the queue
+      const { data: unmatchedUsers, error: matchError } = await supabase
+        .from("queue")
+        .select("*")
+        .eq("is_matched", false)
+        .neq("user_id", userId)
+        .limit(1);
+  
+      if (matchError) {
+        console.error("Error fetching unmatched users:", matchError);
+        throw matchError;
+      }
+  
+      console.log("Unmatched users found:", unmatchedUsers);
+  
+      if (unmatchedUsers && unmatchedUsers.length > 0) {
+        // Match the current user with the first unmatched user
+        const otherUser = unmatchedUsers[0];
+        console.log("Matching with user:", otherUser.user_id);
+  
+        // **Debugging Logs**
+        console.log("auth.uid():", userId);
+        console.log("player_1:", userId);
+        console.log("player_2:", otherUser.user_id);
+  
+        // Create a new game
+        const formattedBoard = JSON.stringify(Array(9).fill(null));
+        const { data: newGame, error: gameError } = await supabase
+          .from("games")
+          .insert([
+            {
+              player_1: userId,
+              player_2: otherUser.user_id,
+              board: formattedBoard,
+              current_turn: "player_1",
+              status: "active",
+            },
+          ])
+          .select()
+          .single();
+  
+        if (gameError) {
+          console.error("Error creating a new game:", gameError);
+          throw gameError;
         }
-      )
-      .subscribe();
-  } catch (error) {
-    console.error("Error finding or creating a match:", error.message);
-    alert("Error finding a match. Please try again.");
-  }
-};
+  
+        console.log("Game created:", newGame);
+  
+        // Update the queue entries for both users
+        const { error: updateError1 } = await supabase
+          .from("queue")
+          .update({ is_matched: true, game_id: newGame.id })
+          .eq("user_id", userId);
+  
+        const { error: updateError2 } = await supabase
+          .from("queue")
+          .update({ is_matched: true, game_id: newGame.id })
+          .eq("user_id", otherUser.user_id);
+  
+        if (updateError1 || updateError2) {
+          console.error("Error updating queue entries:", {
+            updateError1,
+            updateError2,
+          });
+          throw new Error("Error updating queue entries.");
+        }
+  
+        console.log("Users matched and queue updated.");
+      } else {
+        console.log("No unmatched users found. Waiting...");
+      }
+    } catch (error) {
+      console.error("Error finding a match:", error.message);
+      alert("Error finding a match. Please try again.");
+    }
+  };
   
 
+  
+ 
   return (
     <div className="home-screen-container">
       <div className="vertical-content-box">
