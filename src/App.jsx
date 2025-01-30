@@ -6,6 +6,7 @@ import HomeScreen from "./components/HomeScreen";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PlayBotScreen from "./components/PlayBotScreen";
 import PlayRandomScreen from "./components/PlayRandomScreen";
+import GameScreen from "./components/GameScreen";
 
 const App = () => {
   return (
@@ -38,6 +39,14 @@ const App = () => {
           element={
             <ProtectedRoute>
               <PlayRandomScreen />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/game/:gameid"
+          element={
+            <ProtectedRoute>
+              <GameScreen />
             </ProtectedRoute>
           }
         />
