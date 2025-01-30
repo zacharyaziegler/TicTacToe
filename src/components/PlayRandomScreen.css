@@ -21,4 +21,18 @@
   
 .find-match-button {
     width: 30%;
+    background-color: #0d963b;
+}
+
+.find-match-button:hover {
+  background-color: #035f22;
+}
+
+.cancel-button {
+  width: 30%;
+  background-color: #ac190f;
+}
+
+.cancel-button:hover {
+  background-color: #4d0a05;
 }
