@@ -1,81 +1,215 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { gsap } from "gsap";
 import { supabase } from "../supabaseClient";
-import "./PlayBotScreen.css";
+import CoinFlip from "./CoinFlip"; // Ensure this component is implemented
+import "./GameScreen.css";
 
-  // Winning combinations (indexes)
-  const winningCombinations = [
-    [0, 1, 2], // Top row
-    [3, 4, 5], // Middle row
-    [6, 7, 8], // Bottom row
-    [0, 3, 6], // Left column
-    [1, 4, 7], // Middle column
-    [2, 5, 8], // Right column
-    [0, 4, 8], // Diagonal top-left to bottom-right
-    [2, 4, 6], // Diagonal top-right to bottom-left
-  ];
+// Define the winning combinations for tic tac toe
+const winningCombinations = [
+  [0, 1, 2], [3, 4, 5], [6, 7, 8],
+  [0, 3, 6], [1, 4, 7], [2, 5, 8],
+  [0, 4, 8], [2, 4, 6],
+];
 
 const GameScreen = () => {
-  const [board, setBoard] = useState(Array(9).fill(null)); // 9 squares for a 3x3 board
-  const [isPlayerTurn, setIsPlayerTurn] = useState(true); // Track turns (for bot logic later)
-  const [playerSymbol, setPlayerSymbol] = useState(""); // Track the player's chosen symbol (X or O)
-  const [botSymbol, setBotSymbol] = useState(""); // Track the bot's symbol
-  const [showConfigPopup, setShowConfigPopup] = useState(false); // Let animation play initially, then show popup
-  const [botShouldMoveFirst, setBotShouldMoveFirst] = useState(false); // Track if bot should move first
-  const [winner, setWinner] = useState(null); // Track the winner
-  const [isTie, setIsTie] = useState(false); // Track if the game is a tie
-  const navigate = useNavigate(); // For navigation back to home
-  const [username, setUsername] = useState("Loading..."); // Displayed username
-  const ANIMATION_DURATION = 1200; // Duration of the animation in ms
+  const { gameId } = useParams(); // Get the game id from the URL
+  const navigate = useNavigate();
 
-  /****** LOGIC ******/
+  // Local state variables
+  const [board, setBoard] = useState(Array(9).fill(null)); // Game board
+  const [currentTurn, setCurrentTurn] = useState(null); // "player_1" or "player_2"
+  const [winner, setWinner] = useState(null); // Winner ("player_1" or "player_2")
+  const [isTie, setIsTie] = useState(false); // Tie flag
+  const [showCoinFlip, setShowCoinFlip] = useState(false);
+  const [gameData, setGameData] = useState(null);
+  
+  // New state for the coin flip outcome (either "player_1" or "player_2")
+  const [coinFlipOutcome, setCoinFlipOutcome] = useState(null);
 
-  // Fetch the username of the logged-in user from Supabase
+  // Local symbols for the current user and opponent
+  const [mySymbol, setMySymbol] = useState("");
+  const [opponentSymbol, setOpponentSymbol] = useState("");
+  // The role of the current user ("player_1" or "player_2")
+  const [playerRole, setPlayerRole] = useState("");
+
+  // Usernames (fetched from profiles)
+  const [username, setUsername] = useState("Loading...");
+  const [opponentName, setOpponentName] = useState("Loading...");
+
+  // New state to store current user's id
+  const [userId, setUserId] = useState(null);
+
+  // On mount: fetch current user and game record from Supabase
   useEffect(() => {
-    const fetchUsername = async () => {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
+    const fetchGameData = async () => {
+      try {
+        // 1. Get the authenticated user
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError) {
+          console.error("Auth error:", authError);
+          return;
+        }
+        setUserId(user.id);
 
-      if (authError) {
-        console.error("Error fetching user:", authError);
-        return;
-      }
+        // 2. Fetch the game record by gameId
+        const { data: game, error: gameError } = await supabase
+          .from("games")
+          .select("*")
+          .eq("id", gameId)
+          .single();
+        if (gameError) {
+          console.error("Error fetching game:", gameError);
+          return;
+        }
+        setGameData(game);
+        setBoard(JSON.parse(game.board));
+        setCurrentTurn(game.current_turn);
 
-      // Fetch profile data
-      const { data, error } = await supabase
-        .from("profiles") // Replace "profiles" with your table name if different
-        .select("username")
-        .eq("id", user.id)
-        .single();
+        // 3. Determine the player's role based on the game record
+        if (game.player_1 === user.id) {
+          setPlayerRole("player_1");
+        } else if (game.player_2 === user.id) {
+          setPlayerRole("player_2");
+        }
 
-      if (error) {
-        console.error("Error fetching username:", error);
-      } else {
-        setUsername(data.username);
+        // 4. Handle symbol assignment
+        if (!game.symbol_x && !game.symbol_o) {
+          // Pre-determine coin flip outcome on the server side
+          const flipOutcome = Math.random() < 0.5 ? "player_1" : "player_2";
+          // Calculate symbols based on outcome
+          const assignedSymbolX = flipOutcome === "player_1" ? game.player_1 : game.player_2;
+          const assignedSymbolO = flipOutcome === "player_1" ? game.player_2 : game.player_1;
+          const updatedTurn = flipOutcome; // X always goes first
+
+          // Use a conditional update so only one client updates the record
+          const { error: updateError } = await supabase
+            .from("games")
+            .update({
+              symbol_x: assignedSymbolX,
+              symbol_o: assignedSymbolO,
+              current_turn: updatedTurn,
+            })
+            .eq("id", gameId)
+            .is("symbol_x", null); // Only update if symbol_x is still null
+
+          if (!updateError) {
+            // Store the pre-determined outcome for visual effect
+            setCoinFlipOutcome(flipOutcome);
+            setShowCoinFlip(true);
+          } else {
+            // If the update failed because someone else already updated, use stored symbols
+            if (user.id === game.symbol_x) {
+              setMySymbol("X");
+              setOpponentSymbol("O");
+            } else if (user.id === game.symbol_o) {
+              setMySymbol("O");
+              setOpponentSymbol("X");
+            }
+          }
+        } else {
+          // Symbols already assigned; update local state accordingly
+          if (user.id === game.symbol_x) {
+            setMySymbol("X");
+            setOpponentSymbol("O");
+          } else if (user.id === game.symbol_o) {
+            setMySymbol("O");
+            setOpponentSymbol("X");
+          }
+        }
+
+        // 5. Fetch the current user's profile (username)
+        const { data: userProfile, error: userProfileError } = await supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", user.id)
+          .single();
+        if (userProfileError) {
+          console.error("Error fetching current user's profile:", userProfileError);
+        } else {
+          setUsername(userProfile.username);
+        }
+
+        // 6. Determine the opponent's id based on player role
+        const opponentId = game.player_1 === user.id ? game.player_2 : game.player_1;
+
+        // 7. Fetch the opponent's profile (username)
+        const { data: opponentProfile, error: opponentProfileError } = await supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", opponentId)
+          .single();
+        if (opponentProfileError) {
+          console.error("Error fetching opponent's profile:", opponentProfileError);
+        } else {
+          setOpponentName(opponentProfile.username);
+        }
+      } catch (err) {
+        console.error("Error in fetchGameData:", err);
       }
     };
 
-    fetchUsername();
-  }, []);
+    fetchGameData();
+  }, [gameId]);
 
-  // Handle Quit button click
-  const handleBackToHome = () => {
-    // Navigate back to HomeScreen with animation
-    gsap.to(".home-screen-container", {
-      y: "100%",
-      opacity: 0,
-      duration: 1.0,
-      ease: "power2.inOut",
-      onComplete: () => {
-        navigate("/home", { state: { fromScreen: "PlayBotScreen" } }); // Pass the originating screen
-      },
-    });
+  // Callback to handle coin flip animation completion (visual effect only)
+  const handleCoinFlipComplete = async () => {
+    if (!gameData || !userId || !coinFlipOutcome) return;
+
+    // Use the pre-determined outcome to set local symbol state.
+    if (coinFlipOutcome === "player_1") {
+      if (userId === gameData.player_1) {
+        setMySymbol("X");
+        setOpponentSymbol("O");
+      } else {
+        setMySymbol("O");
+        setOpponentSymbol("X");
+      }
+    } else { // coinFlipOutcome === "player_2"
+      if (userId === gameData.player_2) {
+        setMySymbol("X");
+        setOpponentSymbol("O");
+      } else {
+        setMySymbol("O");
+        setOpponentSymbol("X");
+      }
+    }
+    // Hide the coin flip overlay
+    setShowCoinFlip(false);
   };
 
-  // Check if there is a winner
+  // Real-time subscription to listen for updates to the game record
+  useEffect(() => {
+    const gameChannel = supabase
+      .channel("game-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "games",
+          filter: `id=eq.${gameId}`,
+        },
+        (payload) => {
+          const updatedGame = payload.new;
+          setBoard(JSON.parse(updatedGame.board));
+          setCurrentTurn(updatedGame.current_turn);
+          if (updatedGame.winner) {
+            setWinner(updatedGame.winner);
+          }
+          if (updatedGame.is_tie) {
+            setIsTie(true);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      gameChannel.unsubscribe();
+    };
+  }, [gameId]);
+
+  // A helper function to check for a win locally based on the board
   const checkWinner = useCallback((currentBoard) => {
     for (const combination of winningCombinations) {
       const [a, b, c] = combination;
@@ -84,134 +218,75 @@ const GameScreen = () => {
         currentBoard[a] === currentBoard[b] &&
         currentBoard[a] === currentBoard[c]
       ) {
-        return currentBoard[a]; // Return "X" or "O" (the winner)
+        return currentBoard[a]; // Returns "X" or "O"
       }
     }
-    return null; // No winner
-  }, []); // Dependency array is empty because `winningCombinations` is static
+    return null;
+  }, []);
 
-// Bot's move logic
-const handleBotMove = useCallback(
-  (currentBoard) => {
-    const emptyIndices = currentBoard
-      .map((square, index) => (square === null ? index : null))
-      .filter((i) => i !== null);
-
-    if (emptyIndices.length === 0) return; // No moves left (end of game)
-
-    let bestMove = null;
-
-    // 1. Check if the bot can win
-    for (const combination of winningCombinations) {
-      const [a, b, c] = combination;
-      const values = [currentBoard[a], currentBoard[b], currentBoard[c]];
-      if (values.filter((val) => val === botSymbol).length === 2 && values.includes(null)) {
-        bestMove = combination[values.indexOf(null)]; // Winning move for bot
-        break;
-      }
+  // Handle a player clicking on a square
+  const handleSquareClick = async (index) => {
+    if (board[index] || winner || isTie) return;
+    if (
+      (currentTurn === "player_1" && playerRole !== "player_1") ||
+      (currentTurn === "player_2" && playerRole !== "player_2")
+    ) {
+      return;
     }
 
-    // 2. Block the player if they’re about to win
-    if (bestMove === null) {
-      for (const combination of winningCombinations) {
-        const [a, b, c] = combination;
-        const values = [currentBoard[a], currentBoard[b], currentBoard[c]];
-        if (values.filter((val) => val === playerSymbol).length === 2 && values.includes(null)) {
-          bestMove = combination[values.indexOf(null)]; // Blocking move
-          break;
-        }
-      }
-    }
-
-    // 3. Otherwise, pick a random available square
-    if (bestMove === null) {
-      const randomIndex = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
-      bestMove = randomIndex;
-    }
-
-    const newBoard = [...currentBoard];
-    newBoard[bestMove] = botSymbol; // Bot places its symbol
-    setBoard(newBoard); // Update the board state
-
-    // Check for a winner after the bot's move
-    const gameWinner = checkWinner(newBoard);
-    if (gameWinner) {
-      setWinner(gameWinner);
-    } else if (newBoard.every((square) => square !== null)) {
-      setIsTie(true); // All squares filled and no winner
-    } else {
-      setIsPlayerTurn(true); // Player's turn after bot moves
-    }
-  },
-  [botSymbol, playerSymbol, checkWinner, setBoard, setIsPlayerTurn]
-);
-
-
-
-   // Handle player symbol selection and start the game
-   const handleStartMatch = (symbol) => {
-    setPlayerSymbol(symbol);
-    setBotSymbol(symbol === "X" ? "O" : "X"); // Bot takes the opposite symbol
-    setShowConfigPopup(false); // Close the popup
-
-    setIsPlayerTurn(symbol === "X"); // Player goes first if "X", otherwise bot goes first
-
-    if (symbol === "O") {
-      setBotShouldMoveFirst(true); // Trigger bot's first move
-    }
-  };
-
-  useEffect(() => {
-    if (botShouldMoveFirst) {
-      setTimeout(() => {
-        handleBotMove(board); // Make the bot's first move using the latest board state
-        setBotShouldMoveFirst(false); // Prevent further automatic first moves
-      }, 500);
-    }
-  }, [botShouldMoveFirst, board, handleBotMove]);
-
-  // Handle player clicking a square
-  const handleSquareClick = (index) => {
-    if (board[index] || !isPlayerTurn || !playerSymbol || winner || isTie) return;
     const newBoard = [...board];
-    newBoard[index] = playerSymbol;
-    setBoard(newBoard);
+    newBoard[index] = mySymbol;
 
-    const gameWinner = checkWinner(newBoard);
-    if (gameWinner) {
-      setWinner(gameWinner);
-    } else if (newBoard.every((square) => square !== null)) {
-      setIsTie(true); // All squares filled and no winner
-    } else {
-      setIsPlayerTurn(false);
-      setTimeout(() => handleBotMove(newBoard), 500);
+    const localWinner = checkWinner(newBoard);
+    let updatedWinner = null;
+    let updatedIsTie = false;
+    let updatedStatus = "active";
+
+    if (localWinner) {
+      updatedWinner = playerRole;
+      updatedStatus = "completed";
+    } else if (newBoard.every((cell) => cell !== null)) {
+      updatedIsTie = true;
+      updatedStatus = "completed";
+    }
+
+    const nextTurn = playerRole === "player_1" ? "player_2" : "player_1";
+
+    const { error } = await supabase
+      .from("games")
+      .update({
+        board: JSON.stringify(newBoard),
+        current_turn: nextTurn,
+        winner: updatedWinner,
+        is_tie: updatedIsTie,
+        status: updatedStatus,
+      })
+      .eq("id", gameId);
+
+    if (error) {
+      console.error("Error updating move:", error);
     }
   };
 
-
-  const handlePlayAgain = () => {
-    setBoard(Array(9).fill(null));
-    setWinner(null);
-    setIsTie(false); // Reset tie state
-    setShowConfigPopup(true); // Show configuration popup again
-    setIsPlayerTurn(true); // Default to true until the player picks the symbol in the next round
+  // Handle navigation back to the home screen with GSAP animation
+  const handleBackToHome = () => {
+    gsap.to(".home-screen-container", {
+      y: "100%",
+      opacity: 0,
+      duration: 1,
+      ease: "power2.inOut",
+      onComplete: () =>
+        navigate("/home", { state: { fromScreen: "GameScreen" } }),
+    });
   };
-  
-  /****** ANIMATION ******/
+
+  // GSAP animation on component mount
   useEffect(() => {
     gsap.fromTo(
       ".home-screen-container",
       { y: "100%", opacity: 0 },
       { y: "0%", opacity: 1, duration: 1.2, ease: "power2.out" }
     );
-
-    // Show the config popup after the animation completes
-    const timer = setTimeout(() => {
-      setShowConfigPopup(true); // Show the configuration overlay
-    }, ANIMATION_DURATION);
-
-    // Clean up the timeout to prevent memory leaks
-    return () => clearTimeout(timer);
   }, []);
 
   return (
@@ -220,28 +295,30 @@ const handleBotMove = useCallback(
         <button className="quit-button" onClick={handleBackToHome}>
           Quit
         </button>
-        <h1>Bot Match</h1>
-  
+        <h1>Multiplayer Match</h1>
         <div className="game-wrapper">
-          {/* Left: Player Info */}
+          {/* Left: Display current user info */}
           <div className="player-info">
             <h3>{username}</h3>
             <p>
               Symbol:{" "}
-              <span className={playerSymbol === "X" ? "x-symbol" : "o-symbol"}>
-                {playerSymbol}
+              <span className={mySymbol === "X" ? "x-symbol" : "o-symbol"}>
+                {mySymbol}
               </span>
             </p>
           </div>
-  
-          {/* Game Board */}
+          {/* Center: Game board */}
           <div className="game-board-wrapper">
             <div className="game-board">
               {board.map((square, index) => (
                 <div
                   key={index}
                   className={`square ${
-                    square === "X" ? "x-symbol" : square === "O" ? "o-symbol" : ""
+                    square === "X"
+                      ? "x-symbol"
+                      : square === "O"
+                      ? "o-symbol"
+                      : ""
                   }`}
                   onClick={() => handleSquareClick(index)}
                 >
@@ -250,66 +327,38 @@ const handleBotMove = useCallback(
               ))}
             </div>
           </div>
-  
-          {/* Right: Bot Info */}
+          {/* Right: Display opponent info */}
           <div className="player-info">
-            <h3>Bot</h3>
+            <h3>{opponentName}</h3>
             <p>
               Symbol:{" "}
-              <span className={botSymbol === "X" ? "x-symbol" : "o-symbol"}>
-                {botSymbol}
+              <span className={opponentSymbol === "X" ? "x-symbol" : "o-symbol"}>
+                {opponentSymbol}
               </span>
             </p>
           </div>
         </div>
       </div>
-  
-      {/* Configuration Popup */}
-      {showConfigPopup && (
-        <div className="config-popup-overlay">
-          <div className="config-popup-content">
-            <h2>Configure Match</h2>
-            <p>Choose your symbol:</p>
-            <div className="button-group">
-              <button
-                className="symbol-button"
-                onClick={() => handleStartMatch("X")}
-              >
-                X
-              </button>
-              <button
-                className="symbol-button"
-                onClick={() => handleStartMatch("O")}
-              >
-                O
-              </button>
-            </div>
-            <p>Once you choose your symbol, the game will begin.</p>
-            <p>*Bot matches will not affect your record</p>
-          </div>
-        </div>
-      )}
-  
-      {/* Winner or Tie Popup */}
       {(winner || isTie) && (
         <div className="winner-popup-overlay">
           <div className="winner-popup-content">
             <h2>
               {winner
-                ? winner === playerSymbol
+                ? winner === playerRole
                   ? "You Win!"
                   : "You Lost!"
                 : "It's a Tie!"}
             </h2>
             <div className="winner-popup-buttons">
-            <button className="play-again-button" onClick={handlePlayAgain}>
-              Play Again
-            </button>
-            <button className="play-again-button" onClick= { handleBackToHome }>Quit</button>
+              <button className="play-again-button" onClick={handleBackToHome}>
+                Quit
+              </button>
             </div>
           </div>
         </div>
       )}
+      {/* Render the coin flip overlay when needed */}
+      {showCoinFlip && <CoinFlip onFlipComplete={handleCoinFlipComplete} />}
     </div>
   );
 };

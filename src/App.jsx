@@ -43,7 +43,7 @@ const App = () => {
           }
         />
         <Route
-          path="/game/:gameid"
+          path="/game/:gameId"
           element={
             <ProtectedRoute>
               <GameScreen />
