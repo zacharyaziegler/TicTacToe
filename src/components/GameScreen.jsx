@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { gsap } from "gsap";
 import { supabase } from "../supabaseClient";
-import CoinFlip from "./CoinFlip"; // Ensure this component is implemented
+import CoinFlip from "./CoinFlip"; // Updated below
 import "./GameScreen.css";
 
 // Define the winning combinations for tic tac toe
@@ -22,10 +22,13 @@ const GameScreen = () => {
   const [winner, setWinner] = useState(null); // Winner ("player_1" or "player_2")
   const [isTie, setIsTie] = useState(false); // Tie flag
   const [showCoinFlip, setShowCoinFlip] = useState(false);
+  // We still keep gameData in state so that we can re-fetch later,
+  // even if it’s not directly read in the render.
+  // eslint-disable-next-line no-unused-vars
   const [gameData, setGameData] = useState(null);
-  
-  // New state for the coin flip outcome (either "player_1" or "player_2")
-  const [coinFlipOutcome, setCoinFlipOutcome] = useState(null);
+
+  // New state for the final coin side for this user ("front" or "back")
+  const [finalSide, setFinalSide] = useState("");
 
   // Local symbols for the current user and opponent
   const [mySymbol, setMySymbol] = useState("");
@@ -39,6 +42,32 @@ const GameScreen = () => {
 
   // New state to store current user's id
   const [userId, setUserId] = useState(null);
+
+  // Helper function to re-fetch the game record from Supabase
+  const reFetchGameRecord = async () => {
+    const { data: updatedGame, error: refetchError } = await supabase
+      .from("games")
+      .select("*")
+      .eq("id", gameId)
+      .single();
+    if (refetchError) {
+      console.error("Error re-fetching game:", refetchError);
+      return;
+    }
+    setGameData(updatedGame);
+    setBoard(JSON.parse(updatedGame.board));
+    setCurrentTurn(updatedGame.current_turn);
+    // Update local symbol state using the trigger-assigned values
+    if (userId === updatedGame.symbol_x) {
+      setMySymbol("X");
+      setOpponentSymbol("O");
+      setFinalSide("front"); // front face shows X
+    } else if (userId === updatedGame.symbol_o) {
+      setMySymbol("O");
+      setOpponentSymbol("X");
+      setFinalSide("back"); // back face shows O
+    }
+  };
 
   // On mount: fetch current user and game record from Supabase
   useEffect(() => {
@@ -73,49 +102,23 @@ const GameScreen = () => {
           setPlayerRole("player_2");
         }
 
-        // 4. Handle symbol assignment
-        if (!game.symbol_x && !game.symbol_o) {
-          // Pre-determine coin flip outcome on the server side
-          const flipOutcome = Math.random() < 0.5 ? "player_1" : "player_2";
-          // Calculate symbols based on outcome
-          const assignedSymbolX = flipOutcome === "player_1" ? game.player_1 : game.player_2;
-          const assignedSymbolO = flipOutcome === "player_1" ? game.player_2 : game.player_1;
-          const updatedTurn = flipOutcome; // X always goes first
-
-          // Use a conditional update so only one client updates the record
-          const { error: updateError } = await supabase
-            .from("games")
-            .update({
-              symbol_x: assignedSymbolX,
-              symbol_o: assignedSymbolO,
-              current_turn: updatedTurn,
-            })
-            .eq("id", gameId)
-            .is("symbol_x", null); // Only update if symbol_x is still null
-
-          if (!updateError) {
-            // Store the pre-determined outcome for visual effect
-            setCoinFlipOutcome(flipOutcome);
-            setShowCoinFlip(true);
-          } else {
-            // If the update failed because someone else already updated, use stored symbols
-            if (user.id === game.symbol_x) {
-              setMySymbol("X");
-              setOpponentSymbol("O");
-            } else if (user.id === game.symbol_o) {
-              setMySymbol("O");
-              setOpponentSymbol("X");
-            }
-          }
+        // 4. Handle symbol assignment using trigger-assigned values.
+        // The trigger on your games table now sets symbol_x and symbol_o when a game is inserted.
+        if (game.symbol_x && game.symbol_o) {
+          // Instead of immediately setting the symbols, force the coin flip overlay
+          // to appear for a set duration before updating local state.
+          // Determine final side: if user is assigned "X", coin lands with front face; if "O", then back.
+          const userFinalSide = user.id === game.symbol_x ? "front" : "back";
+          setFinalSide(userFinalSide);
+          setShowCoinFlip(true);
+          // Delay re-fetching the record so that the coin flip animation plays.
+          setTimeout(async () => {
+            await reFetchGameRecord();
+            setShowCoinFlip(false);
+          }, 2000); // 2000ms delay for the coin flip animation
         } else {
-          // Symbols already assigned; update local state accordingly
-          if (user.id === game.symbol_x) {
-            setMySymbol("X");
-            setOpponentSymbol("O");
-          } else if (user.id === game.symbol_o) {
-            setMySymbol("O");
-            setOpponentSymbol("X");
-          }
+          // If symbols are not yet set, also show the coin flip overlay.
+          setShowCoinFlip(true);
         }
 
         // 5. Fetch the current user's profile (username)
@@ -132,7 +135,6 @@ const GameScreen = () => {
 
         // 6. Determine the opponent's id based on player role
         const opponentId = game.player_1 === user.id ? game.player_2 : game.player_1;
-
         // 7. Fetch the opponent's profile (username)
         const { data: opponentProfile, error: opponentProfileError } = await supabase
           .from("profiles")
@@ -152,29 +154,10 @@ const GameScreen = () => {
     fetchGameData();
   }, [gameId]);
 
-  // Callback to handle coin flip animation completion (visual effect only)
+  // Callback to handle coin flip animation completion (visual effect only).
+  // Once the animation is complete, re-fetch the game record so that local state reflects the trigger-assigned values.
   const handleCoinFlipComplete = async () => {
-    if (!gameData || !userId || !coinFlipOutcome) return;
-
-    // Use the pre-determined outcome to set local symbol state.
-    if (coinFlipOutcome === "player_1") {
-      if (userId === gameData.player_1) {
-        setMySymbol("X");
-        setOpponentSymbol("O");
-      } else {
-        setMySymbol("O");
-        setOpponentSymbol("X");
-      }
-    } else { // coinFlipOutcome === "player_2"
-      if (userId === gameData.player_2) {
-        setMySymbol("X");
-        setOpponentSymbol("O");
-      } else {
-        setMySymbol("O");
-        setOpponentSymbol("X");
-      }
-    }
-    // Hide the coin flip overlay
+    await reFetchGameRecord();
     setShowCoinFlip(false);
   };
 
@@ -209,7 +192,7 @@ const GameScreen = () => {
     };
   }, [gameId]);
 
-  // A helper function to check for a win locally based on the board
+  // Helper function to check for a win locally based on the board
   const checkWinner = useCallback((currentBoard) => {
     for (const combination of winningCombinations) {
       const [a, b, c] = combination;
@@ -233,7 +216,6 @@ const GameScreen = () => {
     ) {
       return;
     }
-
     const newBoard = [...board];
     newBoard[index] = mySymbol;
 
@@ -241,17 +223,14 @@ const GameScreen = () => {
     let updatedWinner = null;
     let updatedIsTie = false;
     let updatedStatus = "active";
-
     if (localWinner) {
       updatedWinner = playerRole;
       updatedStatus = "completed";
-    } else if (newBoard.every((cell) => cell !== null)) {
+    } else if (newBoard.every(cell => cell !== null)) {
       updatedIsTie = true;
       updatedStatus = "completed";
     }
-
     const nextTurn = playerRole === "player_1" ? "player_2" : "player_1";
-
     const { error } = await supabase
       .from("games")
       .update({
@@ -262,7 +241,6 @@ const GameScreen = () => {
         status: updatedStatus,
       })
       .eq("id", gameId);
-
     if (error) {
       console.error("Error updating move:", error);
     }
@@ -280,7 +258,6 @@ const GameScreen = () => {
     });
   };
 
-  // GSAP animation on component mount
   useEffect(() => {
     gsap.fromTo(
       ".home-screen-container",
@@ -357,8 +334,12 @@ const GameScreen = () => {
           </div>
         </div>
       )}
-      {/* Render the coin flip overlay when needed */}
-      {showCoinFlip && <CoinFlip onFlipComplete={handleCoinFlipComplete} />}
+      {showCoinFlip && (
+        <CoinFlip 
+          onFlipComplete={handleCoinFlipComplete} 
+          finalSide={finalSide} 
+        />
+      )}
     </div>
   );
 };
