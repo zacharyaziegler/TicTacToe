@@ -207,44 +207,54 @@ const GameScreen = () => {
     return null;
   }, []);
 
-  // Handle a player clicking on a square
-  const handleSquareClick = async (index) => {
-    if (board[index] || winner || isTie) return;
-    if (
-      (currentTurn === "player_1" && playerRole !== "player_1") ||
-      (currentTurn === "player_2" && playerRole !== "player_2")
-    ) {
-      return;
-    }
-    const newBoard = [...board];
-    newBoard[index] = mySymbol;
 
-    const localWinner = checkWinner(newBoard);
-    let updatedWinner = null;
-    let updatedIsTie = false;
-    let updatedStatus = "active";
-    if (localWinner) {
-      updatedWinner = playerRole;
-      updatedStatus = "completed";
-    } else if (newBoard.every(cell => cell !== null)) {
-      updatedIsTie = true;
-      updatedStatus = "completed";
-    }
-    const nextTurn = playerRole === "player_1" ? "player_2" : "player_1";
-    const { error } = await supabase
-      .from("games")
-      .update({
-        board: JSON.stringify(newBoard),
-        current_turn: nextTurn,
-        winner: updatedWinner,
-        is_tie: updatedIsTie,
-        status: updatedStatus,
-      })
-      .eq("id", gameId);
-    if (error) {
-      console.error("Error updating move:", error);
-    }
-  };
+// Handle a player clicking on a square
+const handleSquareClick = async (index) => {
+  if (board[index] || winner || isTie) return;
+
+  if ((currentTurn === "player_1" && playerRole !== "player_1") || (currentTurn === "player_2" && playerRole !== "player_2")) {
+    console.warn("Not your turn!");
+    return;
+  }
+
+  const newBoard = [...board];
+  newBoard[index] = mySymbol;
+  setBoard(newBoard);
+
+  const localWinner = checkWinner(newBoard);
+  let updatedWinner = null;
+  let updatedIsTie = false;
+  let updatedStatus = "active";
+
+  if (localWinner) {
+    updatedWinner = playerRole;
+    updatedStatus = "completed";
+  } else if (newBoard.every(cell => cell !== null)) {
+    updatedIsTie = true;
+    updatedStatus = "completed";
+  }
+
+  const nextTurn = playerRole === "player_1" ? "player_2" : "player_1";
+
+  console.log("Updating game with ID:", gameId);
+  console.log("Setting current_turn to:", updatedWinner ? "None (game over)" : nextTurn);
+
+  const { error } = await supabase
+    .from("games")
+    .update({
+      board: JSON.stringify(newBoard),
+      current_turn: updatedWinner ? null : nextTurn,
+      winner: updatedWinner,
+      is_tie: updatedIsTie,
+      status: updatedStatus,
+    })
+    .eq("id", gameId);
+
+  if (error) {
+    console.error("Error updating move in Supabase:", error);
+  }
+};
+  
 
   // Handle navigation back to the home screen with GSAP animation
   const handleBackToHome = () => {
