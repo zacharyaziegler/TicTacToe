@@ -7,32 +7,34 @@ import "./GameScreen.css";
 
 // Define the winning combinations for tic tac toe
 const winningCombinations = [
-  [0, 1, 2], [3, 4, 5], [6, 7, 8],
-  [0, 3, 6], [1, 4, 7], [2, 5, 8],
-  [0, 4, 8], [2, 4, 6],
+  [0, 1, 2],
+  [3, 4, 5],
+  [6, 7, 8],
+  [0, 3, 6],
+  [1, 4, 7],
+  [2, 5, 8],
+  [0, 4, 8],
+  [2, 4, 6],
 ];
 
 const GameScreen = () => {
   const { gameId } = useParams(); // Get the game id from the URL
   const navigate = useNavigate();
-
-  // Local state variables
   const [board, setBoard] = useState(Array(9).fill(null)); // Game board
   const [currentTurn, setCurrentTurn] = useState(null); // "player_1" or "player_2"
   const [winner, setWinner] = useState(null); // Winner ("player_1" or "player_2")
   const [isTie, setIsTie] = useState(false); // Tie flag
   const [showCoinFlip, setShowCoinFlip] = useState(false);
-  // We still keep gameData in state so that we can re-fetch later,
-  // even if it’s not directly read in the render.
-  // eslint-disable-next-line no-unused-vars
+
   const [gameData, setGameData] = useState(null);
 
-  // New state for the final coin side for this user ("front" or "back")
+  // Final coin side for this user ("front" or "back")
   const [finalSide, setFinalSide] = useState("");
 
   // Local symbols for the current user and opponent
   const [mySymbol, setMySymbol] = useState("");
   const [opponentSymbol, setOpponentSymbol] = useState("");
+
   // The role of the current user ("player_1" or "player_2")
   const [playerRole, setPlayerRole] = useState("");
 
@@ -40,8 +42,8 @@ const GameScreen = () => {
   const [username, setUsername] = useState("Loading...");
   const [opponentName, setOpponentName] = useState("Loading...");
 
-  // New state to store current user's id
   const [userId, setUserId] = useState(null);
+  const [forfeitedByOpponent, setForfeitedByOpponent] = useState(false);
 
   // Helper function to re-fetch the game record from Supabase
   const reFetchGameRecord = async () => {
@@ -74,7 +76,10 @@ const GameScreen = () => {
     const fetchGameData = async () => {
       try {
         // 1. Get the authenticated user
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
         if (authError) {
           console.error("Auth error:", authError);
           return;
@@ -128,21 +133,29 @@ const GameScreen = () => {
           .eq("id", user.id)
           .single();
         if (userProfileError) {
-          console.error("Error fetching current user's profile:", userProfileError);
+          console.error(
+            "Error fetching current user's profile:",
+            userProfileError
+          );
         } else {
           setUsername(userProfile.username);
         }
 
         // 6. Determine the opponent's id based on player role
-        const opponentId = game.player_1 === user.id ? game.player_2 : game.player_1;
+        const opponentId =
+          game.player_1 === user.id ? game.player_2 : game.player_1;
         // 7. Fetch the opponent's profile (username)
-        const { data: opponentProfile, error: opponentProfileError } = await supabase
-          .from("profiles")
-          .select("username")
-          .eq("id", opponentId)
-          .single();
+        const { data: opponentProfile, error: opponentProfileError } =
+          await supabase
+            .from("profiles")
+            .select("username")
+            .eq("id", opponentId)
+            .single();
         if (opponentProfileError) {
-          console.error("Error fetching opponent's profile:", opponentProfileError);
+          console.error(
+            "Error fetching opponent's profile:",
+            opponentProfileError
+          );
         } else {
           setOpponentName(opponentProfile.username);
         }
@@ -153,6 +166,8 @@ const GameScreen = () => {
 
     fetchGameData();
   }, [gameId]);
+
+  
 
   // Callback to handle coin flip animation completion (visual effect only).
   // Once the animation is complete, re-fetch the game record so that local state reflects the trigger-assigned values.
@@ -173,24 +188,38 @@ const GameScreen = () => {
           table: "games",
           filter: `id=eq.${gameId}`,
         },
-        (payload) => {
+        async (payload) => {
           const updatedGame = payload.new;
           setBoard(JSON.parse(updatedGame.board));
           setCurrentTurn(updatedGame.current_turn);
+  
           if (updatedGame.winner) {
             setWinner(updatedGame.winner);
           }
           if (updatedGame.is_tie) {
             setIsTie(true);
           }
+  
+          // ✅ Ensure forfeit is processed before rendering popup
+          if (updatedGame.forfeited_by && updatedGame.status === "completed") {
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
+  
+            if (user?.id !== updatedGame.forfeited_by) {
+              console.log("Opponent has forfeited. Showing custom popup...");
+              setForfeitedByOpponent(true);
+            }
+          }
         }
       )
       .subscribe();
-
+  
     return () => {
       gameChannel.unsubscribe();
     };
   }, [gameId]);
+  
 
   // Helper function to check for a win locally based on the board
   const checkWinner = useCallback((currentBoard) => {
@@ -207,54 +236,58 @@ const GameScreen = () => {
     return null;
   }, []);
 
+  // Handle a player clicking on a square
+  const handleSquareClick = async (index) => {
+    if (board[index] || winner || isTie) return;
 
-// Handle a player clicking on a square
-const handleSquareClick = async (index) => {
-  if (board[index] || winner || isTie) return;
+    if (
+      (currentTurn === "player_1" && playerRole !== "player_1") ||
+      (currentTurn === "player_2" && playerRole !== "player_2")
+    ) {
+      console.warn("Not your turn!");
+      return;
+    }
 
-  if ((currentTurn === "player_1" && playerRole !== "player_1") || (currentTurn === "player_2" && playerRole !== "player_2")) {
-    console.warn("Not your turn!");
-    return;
-  }
+    const newBoard = [...board];
+    newBoard[index] = mySymbol;
+    setBoard(newBoard);
 
-  const newBoard = [...board];
-  newBoard[index] = mySymbol;
-  setBoard(newBoard);
+    const localWinner = checkWinner(newBoard);
+    let updatedWinner = null;
+    let updatedIsTie = false;
+    let updatedStatus = "active";
 
-  const localWinner = checkWinner(newBoard);
-  let updatedWinner = null;
-  let updatedIsTie = false;
-  let updatedStatus = "active";
+    if (localWinner) {
+      updatedWinner = playerRole;
+      updatedStatus = "completed";
+    } else if (newBoard.every((cell) => cell !== null)) {
+      updatedIsTie = true;
+      updatedStatus = "completed";
+    }
 
-  if (localWinner) {
-    updatedWinner = playerRole;
-    updatedStatus = "completed";
-  } else if (newBoard.every(cell => cell !== null)) {
-    updatedIsTie = true;
-    updatedStatus = "completed";
-  }
+    const nextTurn = playerRole === "player_1" ? "player_2" : "player_1";
 
-  const nextTurn = playerRole === "player_1" ? "player_2" : "player_1";
+    console.log("Updating game with ID:", gameId);
+    console.log(
+      "Setting current_turn to:",
+      updatedWinner ? "None (game over)" : nextTurn
+    );
 
-  console.log("Updating game with ID:", gameId);
-  console.log("Setting current_turn to:", updatedWinner ? "None (game over)" : nextTurn);
+    const { error } = await supabase
+      .from("games")
+      .update({
+        board: JSON.stringify(newBoard),
+        current_turn: updatedWinner ? null : nextTurn,
+        winner: updatedWinner,
+        is_tie: updatedIsTie,
+        status: updatedStatus,
+      })
+      .eq("id", gameId);
 
-  const { error } = await supabase
-    .from("games")
-    .update({
-      board: JSON.stringify(newBoard),
-      current_turn: updatedWinner ? null : nextTurn,
-      winner: updatedWinner,
-      is_tie: updatedIsTie,
-      status: updatedStatus,
-    })
-    .eq("id", gameId);
-
-  if (error) {
-    console.error("Error updating move in Supabase:", error);
-  }
-};
-  
+    if (error) {
+      console.error("Error updating move in Supabase:", error);
+    }
+  };
 
   // Handle navigation back to the home screen with GSAP animation
   const handleBackToHome = () => {
@@ -276,10 +309,49 @@ const handleSquareClick = async (index) => {
     );
   }, []);
 
+  const handleForfeit = async () => {
+    if (!gameData || !userId) return;
+  
+    console.log("Forfeiting game...");
+  
+    // Update the game with the forfeited_by field
+    const { error } = await supabase
+      .from("games")
+      .update({
+        forfeited_by: userId, // Mark the user as the one who forfeited
+        status: "completed",
+      })
+      .eq("id", gameId);
+  
+    if (error) {
+      console.error("Error forfeiting game:", error);
+    } else {
+      console.log("Game forfeited successfully.");
+    }
+  
+    // ✅ Delay navigation slightly to ensure state updates
+    setTimeout(() => {
+      handleBackToHome();
+    }, 1000);
+  };
+  
+
+  // Detect if user closes tab
+  useEffect(() => {
+    const handleBeforeUnload = async () => {
+      await handleForfeit();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [gameData, userId]);
+
   return (
     <div className="home-screen-container">
       <div className="vertical-content-box">
-        <button className="quit-button" onClick={handleBackToHome}>
+        <button className="quit-button" onClick={handleForfeit}>
           Quit
         </button>
         <h1>Multiplayer Match</h1>
@@ -319,18 +391,24 @@ const handleSquareClick = async (index) => {
             <h3>{opponentName}</h3>
             <p>
               Symbol:{" "}
-              <span className={opponentSymbol === "X" ? "x-symbol" : "o-symbol"}>
+              <span
+                className={opponentSymbol === "X" ? "x-symbol" : "o-symbol"}
+              >
                 {opponentSymbol}
               </span>
             </p>
           </div>
         </div>
       </div>
-      {(winner || isTie) && (
+
+      {/* Updated Winner Popup */}
+      {( forfeitedByOpponent || winner || isTie ) && (
         <div className="winner-popup-overlay">
           <div className="winner-popup-content">
             <h2>
-              {winner
+              {forfeitedByOpponent
+                ? "Your Opponent Forfeited! You Win!"
+                : winner
                 ? winner === playerRole
                   ? "You Win!"
                   : "You Lost!"
@@ -344,10 +422,11 @@ const handleSquareClick = async (index) => {
           </div>
         </div>
       )}
+
       {showCoinFlip && (
-        <CoinFlip 
-          onFlipComplete={handleCoinFlipComplete} 
-          finalSide={finalSide} 
+        <CoinFlip
+          onFlipComplete={handleCoinFlipComplete}
+          finalSide={finalSide}
         />
       )}
     </div>
