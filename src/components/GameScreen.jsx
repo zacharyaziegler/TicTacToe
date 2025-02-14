@@ -25,6 +25,7 @@ const GameScreen = () => {
   const [winner, setWinner] = useState(null); // Winner ("player_1" or "player_2")
   const [isTie, setIsTie] = useState(false); // Tie flag
   const [showCoinFlip, setShowCoinFlip] = useState(false);
+  const [forfeitProcessed, setForfeitProcessed] = useState(false);
 
   const [gameData, setGameData] = useState(null);
 
@@ -176,7 +177,6 @@ const GameScreen = () => {
     setShowCoinFlip(false);
   };
 
-  // Real-time subscription to listen for updates to the game record
   useEffect(() => {
     const gameChannel = supabase
       .channel("game-updates")
@@ -190,6 +190,7 @@ const GameScreen = () => {
         },
         async (payload) => {
           const updatedGame = payload.new;
+  
           setBoard(JSON.parse(updatedGame.board));
           setCurrentTurn(updatedGame.current_turn);
   
@@ -200,8 +201,12 @@ const GameScreen = () => {
             setIsTie(true);
           }
   
-          // ✅ Ensure forfeit is processed before rendering popup
-          if (updatedGame.forfeited_by && updatedGame.status === "completed") {
+          // Only trigger the forfeit once
+          if (
+            updatedGame.forfeited_by &&
+            updatedGame.status === "completed" &&
+            !forfeitedByOpponent
+          ) {
             const {
               data: { user },
             } = await supabase.auth.getUser();
@@ -218,7 +223,104 @@ const GameScreen = () => {
     return () => {
       gameChannel.unsubscribe();
     };
-  }, [gameId]);
+  }, [gameId, forfeitedByOpponent]);
+  
+
+ // Presence channel: listen for opponent presence changes and set forfeiture if necessary.
+ useEffect(() => {
+  if (!userId || !gameId || !gameData) return;
+
+  const presenceChannel = supabase.channel(`game-${gameId}`, {
+    config: {
+      presence: { key: userId }, // Identify this user
+    },
+  });
+
+  let forfeitTimeout = null; // Store timeout
+
+  presenceChannel
+    .on("presence", { event: "sync" }, () => {
+      const state = presenceChannel.presenceState();
+      console.log("Presence state updated:", state);
+      const opponentId = gameData.player_1 === userId ? gameData.player_2 : gameData.player_1;
+      if (!opponentId) return;
+
+      if (!state[opponentId] && !forfeitedByOpponent) {
+        console.log("Opponent missing from presence. Checking again in 5s...");
+        if (forfeitTimeout) clearTimeout(forfeitTimeout);
+        forfeitTimeout = setTimeout(() => {
+          const updatedState = presenceChannel.presenceState();
+          if (!updatedState[opponentId] && !forfeitedByOpponent) {
+            console.log("Opponent still missing after 5s. Marking as forfeited.");
+            setForfeitedByOpponent(true);
+          } else {
+            console.log("Opponent reappeared. No forfeit triggered.");
+          }
+        }, 5000); // 5 seconds delay
+      } else {
+        console.log("Opponent is present.");
+        clearTimeout(forfeitTimeout);
+      }
+    })
+    .on("presence", { event: "leave" }, ({ key }) => {
+      console.log(`User ${key} left the game.`);
+      if (key !== userId) { // Only react if opponent left
+        if (forfeitTimeout) clearTimeout(forfeitTimeout);
+        forfeitTimeout = setTimeout(() => {
+          const updatedState = presenceChannel.presenceState();
+          if (!updatedState[key] && !forfeitedByOpponent) {
+            console.log("Opponent has not rejoined after 5s. Marking forfeit.");
+            setForfeitedByOpponent(true);
+          } else {
+            console.log("Opponent rejoined. No forfeit triggered.");
+          }
+        }, 5000); // 5-second delay for both players
+      }
+    })
+    .subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        await presenceChannel.track({ userId });
+        console.log("Presence tracking started for", userId);
+      }
+    });
+
+  return () => {
+    clearTimeout(forfeitTimeout);
+    presenceChannel.unsubscribe();
+  };
+}, [userId, gameId, gameData, forfeitedByOpponent]);
+
+
+  
+useEffect(() => {
+  if (!forfeitedByOpponent || !gameId || gameData?.status === "completed" || forfeitProcessed) return;
+  
+  console.log("Opponent forfeited. Updating database...");
+
+  const updateForfeit = async () => {
+    if (gameData.status === "completed") return;
+    
+    const opponentId = gameData.player_1 === userId ? gameData.player_2 : gameData.player_1;
+    
+    const { error } = await supabase
+      .from("games")
+      .update({
+        forfeited_by: opponentId, // mark the opponent as having forfeited
+        status: "completed",
+      })
+      .eq("id", gameId);
+    
+    if (error) {
+      console.error("Error updating game forfeit:", error);
+    } else {
+      console.log("Game forfeited due to opponent disconnection.");
+      setForfeitProcessed(true);
+    }
+  };
+
+  updateForfeit();
+}, [forfeitedByOpponent, gameId, gameData, userId, forfeitProcessed]);
+
   
 
   // Helper function to check for a win locally based on the board
@@ -310,43 +412,61 @@ const GameScreen = () => {
   }, []);
 
   const handleForfeit = async () => {
-    if (!gameData || !userId) return;
+    if (!gameData || !userId || gameData.status === "completed" || forfeitProcessed || gameData.forfeited_by) return;
   
     console.log("Forfeiting game...");
   
-    // Update the game with the forfeited_by field
+    // Ensure only one forfeit update is made
+    if (gameData.forfeited_by) {
+      console.log("Game already forfeited. Preventing duplicate update.");
+      return;
+    }
+  
     const { error } = await supabase
       .from("games")
       .update({
-        forfeited_by: userId, // Mark the user as the one who forfeited
+        forfeited_by: userId, // Mark the user as forfeiting
         status: "completed",
       })
-      .eq("id", gameId);
+      .eq("id", gameId)
+      .is("forfeited_by", null); // Correct way to check if forfeit hasn't been recorded yet
   
     if (error) {
       console.error("Error forfeiting game:", error);
     } else {
       console.log("Game forfeited successfully.");
+      setForfeitProcessed(true);
     }
   
-    // ✅ Delay navigation slightly to ensure state updates
     setTimeout(() => {
       handleBackToHome();
     }, 1000);
   };
   
-
-  // Detect if user closes tab
+  
   useEffect(() => {
     const handleBeforeUnload = async () => {
-      await handleForfeit();
-    };
+      if (!forfeitProcessed && gameData?.status !== "completed") {
+        console.log("User is closing tab. Waiting 5s before marking forfeit...");
 
+        // Delay forfeit by 5 seconds before updating database
+        setTimeout(async () => {
+          if (!forfeitProcessed) {
+            await handleForfeit();
+          }
+        }, 5000);
+      }
+    };
+  
     window.addEventListener("beforeunload", handleBeforeUnload);
+    
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [gameData, userId]);
+  }, [gameData, userId, forfeitProcessed]);
+  
+  
+  
 
   return (
     <div className="home-screen-container">
