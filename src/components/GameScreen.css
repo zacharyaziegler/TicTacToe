@@ -1,0 +1,7 @@
+.game-title {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: bold;
+  color: white; /* Adjust to match theme */
+  margin-bottom: 10px; /* Space between title and the next element */
+}
