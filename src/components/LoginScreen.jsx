@@ -8,9 +8,7 @@ const LoginScreen = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [errorMessage, setErrorMessage] = useState(""); // State to hold the error message
-
-  /****** LOGIC ******/
+  const [errorMessage, setErrorMessage] = useState(""); 
 
   const handleLogin = async (event) => {
     event.preventDefault(); // Prevent page reload

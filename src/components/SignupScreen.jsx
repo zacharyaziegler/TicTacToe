@@ -7,13 +7,10 @@ import "./SignupScreen.css";
 
 const SignupScreen = () => {
   const navigate = useNavigate();
-
-  /****** STATE MANAGEMENT ******/
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  /****** LOGIC ******/
   const handleSignup = async (e) => {
     e.preventDefault();
   
@@ -37,7 +34,7 @@ const SignupScreen = () => {
     }
   
     try {
-      // Step 1: Sign up the user
+      // Sign up the user
       const { data: user, error: signupError } = await supabase.auth.signUp({
         email,
         password,
@@ -52,7 +49,7 @@ const SignupScreen = () => {
   
       console.log("User ID:", userId);
   
-      // Step 2: Insert a profile for the user
+      // Insert a profile for the user
       const { error: profileError } = await supabase.from("profiles").insert([
         { id: userId, username, wins: 0, losses: 0, ties: 0 },
       ]);
@@ -74,7 +71,6 @@ const SignupScreen = () => {
     return password.length >= 6;
   };
 
-  /*****ANIMATION******/
   const handleBack = () => {
     // Animate the current screen out to the left
     gsap.to(".signup-screen-container", {

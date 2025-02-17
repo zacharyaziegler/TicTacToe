@@ -4,7 +4,7 @@ import { gsap } from "gsap";
 import { supabase } from "../supabaseClient";
 import "./PlayBotScreen.css";
 
-  // Winning combinations (indexes)
+  // Winning combinations 
   const winningCombinations = [
     [0, 1, 2], // Top row
     [3, 4, 5], // Middle row
@@ -29,8 +29,6 @@ const PlayBotScreen = () => {
   const [username, setUsername] = useState("Loading..."); // Displayed username
   const ANIMATION_DURATION = 1200; // Duration of the animation in ms
 
-  /****** LOGIC ******/
-
   // Fetch the username of the logged-in user from Supabase
   useEffect(() => {
     const fetchUsername = async () => {
@@ -46,7 +44,7 @@ const PlayBotScreen = () => {
 
       // Fetch profile data
       const { data, error } = await supabase
-        .from("profiles") // Replace "profiles" with your table name if different
+        .from("profiles") 
         .select("username")
         .eq("id", user.id)
         .single();
@@ -88,7 +86,7 @@ const PlayBotScreen = () => {
       }
     }
     return null; // No winner
-  }, []); // Dependency array is empty because `winningCombinations` is static
+  }, []); 
 
 // Bot's move logic
 const handleBotMove = useCallback(
@@ -197,7 +195,6 @@ const handleBotMove = useCallback(
     setIsPlayerTurn(true); // Default to true until the player picks the symbol in the next round
   };
   
-  /****** ANIMATION ******/
   useEffect(() => {
     gsap.fromTo(
       ".home-screen-container",
@@ -210,7 +207,7 @@ const handleBotMove = useCallback(
       setShowConfigPopup(true); // Show the configuration overlay
     }, ANIMATION_DURATION);
 
-    // Clean up the timeout to prevent memory leaks
+    // Clean up the timeout 
     return () => clearTimeout(timer);
   }, []);
 

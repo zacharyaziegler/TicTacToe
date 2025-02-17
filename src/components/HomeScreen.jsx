@@ -44,7 +44,7 @@ const HomeScreen = () => {
   }, [location.state]);
 
   const handlePlayBot = () => {
-    // GSAP animation: move content up and fade out
+    // Move content up and fade out
     gsap.to(".home-screen-container", {
       y: "-100%", // Move to the top
       opacity: 0, // Fade out
