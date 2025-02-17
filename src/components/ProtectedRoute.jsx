@@ -23,13 +23,12 @@ const ProtectedRoute = ({ children = null}) => {
   }, [navigate]);
 
   if (loading) {
-    return <div className="loading-screen">Loading...</div>; // Optional: Show loading spinner
+    return <div className="loading-screen">Loading...</div>; 
   }
 
   return isAuthenticated ? children : null; // Render children if authenticated
 };
 
-// Add prop types and default props
 ProtectedRoute.propTypes = {
   children: PropTypes.node,
 };

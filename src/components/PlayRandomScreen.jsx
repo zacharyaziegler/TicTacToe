@@ -95,40 +95,7 @@ const PlayRandomScreen = () => {
     }
   };
 
-  // useEffect(() => {
-  //   // heartbeat to ensure user in queue is active
-  //   const updateExpiry = async () => {
-  //     try {
-  //       const {
-  //         data: { user },
-  //         error: authError,
-  //       } = await supabase.auth.getUser();
-  //       if (authError) throw authError;
-
-  //       const userId = user.id;
-
-  //       const { error: updateError } = await supabase
-  //         .from("queue")
-  //         .update({ expiry: new Date(new Date().getTime() + 60000) }) // 1 minute from now
-  //         .eq("user_id", userId);
-
-  //       if (updateError) throw updateError;
-
-  //       console.log("Updated expiry time for user in queue.");
-  //     } catch (error) {
-  //       console.error("Error updating expiry:", error.message);
-  //     }
-  //   };
-
-  //   const interval = setInterval(updateExpiry, 30000); // Update every 30 seconds
-
-  //   return () => {
-  //     clearInterval(interval); // Clear interval on unmount
-  //   };
-  // }, []);
-
   useEffect(() => {
-    // GSAP animation for screen appearance
     gsap.fromTo(
       ".home-screen-container",
       { y: "100%", opacity: 0 }, // Start position
@@ -177,7 +144,7 @@ const PlayRandomScreen = () => {
       const userId = user.id;
       console.log("Current User ID:", userId);
 
-      // Step 1: Add the user to the queue
+      // Add the user to the queue
       const { error: queueError } = await supabase
         .from("queue")
         .insert([{ user_id: userId, is_matched: false, game_id: null }]);
@@ -186,7 +153,7 @@ const PlayRandomScreen = () => {
 
       console.log("User added to queue.");
 
-      // Step 2: Continuously check for a match
+      // Continuously check for a match
       const channel = supabase
         .channel("queue-updates")
         .on(
@@ -211,7 +178,7 @@ const PlayRandomScreen = () => {
         )
         .subscribe();
 
-      // Step 3: Try matching the user with another in the queue
+      // Try matching the user with another in the queue
       const { data: unmatchedUsers, error: matchError } = await supabase
         .from("queue")
         .select("*")
@@ -231,7 +198,7 @@ const PlayRandomScreen = () => {
         const otherUser = unmatchedUsers[0];
         console.log("Matching with user:", otherUser.user_id);
 
-        // **Debugging Logs**
+        // Debugging Logs
         console.log("auth.uid():", userId);
         console.log("player_1:", userId);
         console.log("player_2:", otherUser.user_id);
