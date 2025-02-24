@@ -164,6 +164,7 @@ const PlayRandomScreen = () => {
             table: "queue",
           },
           async (payload) => {
+            console.log("🔄 Queue Update Received:", payload);
             if (payload.new.user_id === userId && payload.new.is_matched) {
               console.log("Match found!", payload.new);
 
