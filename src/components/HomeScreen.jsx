@@ -75,9 +75,9 @@ const HomeScreen = () => {
         <p>Here you can start a game or view your profile.</p>
         <div className="button-container">
           <button className="home-button" onClick={ handlePlayRandom }>Play a Random</button>
-          <button className="home-button">Play a Friend</button>
+          {/* <button className="home-button">Play a Friend</button> */}
           <button className="home-button" onClick={ handlePlayBot }>Play a Bot</button>
-          <button className="home-button">View Profile</button>
+          {/* <button className="home-button">View Profile</button> */}
           <button className="home-button" onClick={ handleLogout }>Log Out</button>
         </div>
       </div>

@@ -59,9 +59,9 @@ const MainScreen = () => {
             Log In
           </button>
           <button className="main-button signup-button" onClick={handleSignup}>Sign Up</button>
-          <button className="main-button anonymous-button">
+          {/* <button className="main-button anonymous-button">
             Continue Anonymously
-          </button>
+          </button> */}
         </div>
     </div>
     );
